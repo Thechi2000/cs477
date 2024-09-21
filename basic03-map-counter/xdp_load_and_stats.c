@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
+#include <linux/bpf.h>
 static const char *__doc__ = "XDP loader and stats program\n"
 	" - Allows selecting BPF --progname name to XDP-attach to --dev\n";
 
@@ -97,7 +98,7 @@ struct record {
 };
 
 struct stats_record {
-	struct record stats[1]; /* Assignment#2: Hint */
+	struct record stats[XDP_ACTION_MAX];
 };
 
 static double calc_period(struct record *r, struct record *p)
@@ -119,15 +120,17 @@ static void stats_print(struct stats_record *stats_rec,
 	double period;
 	__u64 packets;
 	double pps; /* packets per sec */
+	double mbps;
+	__u64 kbytes;
 
-	/* Assignment#2: Print other XDP actions stats  */
+	for(__u32 action_idx = XDP_ABORTED; action_idx < XDP_ACTION_MAX; action_idx++)
 	{
 		char *fmt = "%-12s %'11lld pkts (%'10.0f pps)"
-			//" %'11lld Kbytes (%'6.0f Mbits/s)"
+			" %'11lld Kbytes (%'6.0f Mbits/s)"
 			" period:%f\n";
-		const char *action = action2str(XDP_PASS);
-		rec  = &stats_rec->stats[0];
-		prev = &stats_prev->stats[0];
+		const char *action = action2str(action_idx);
+		rec  = &stats_rec->stats[action_idx];
+		prev = &stats_prev->stats[action_idx];
 
 		period = calc_period(rec, prev);
 		if (period == 0)
@@ -136,7 +139,10 @@ static void stats_print(struct stats_record *stats_rec,
 		packets = rec->total.rx_packets - prev->total.rx_packets;
 		pps     = packets / period;
 
-		printf(fmt, action, rec->total.rx_packets, pps, period);
+		kbytes = rec->total.rx_bytes / 1000;
+		mbps   = (rec->total.rx_bytes) / 1000000.0 / period;
+
+		printf(fmt, action, rec->total.rx_packets, pps, kbytes, mbps, period);
 	}
 }
 
@@ -179,18 +185,18 @@ static bool map_collect(int fd, __u32 map_type, __u32 key, struct record *rec)
 		break;
 	}
 
-	/* Assignment#1: Add byte counters */
 	rec->total.rx_packets = value.rx_packets;
+	rec->total.rx_bytes = value.rx_bytes;
 	return true;
 }
 
 static void stats_collect(int map_fd, __u32 map_type,
 			  struct stats_record *stats_rec)
 {
-	/* Assignment#2: Collect other XDP actions stats  */
-	__u32 key = XDP_PASS;
-
-	map_collect(map_fd, map_type, key, &stats_rec->stats[0]);
+	for(__u32 action_idx = XDP_ABORTED; action_idx < XDP_ACTION_MAX; action_idx++)
+	{
+		map_collect(map_fd, map_type, action_idx, &stats_rec->stats[action_idx]);
+	}
 }
 
 static void stats_poll(int map_fd, __u32 map_type, int interval)
