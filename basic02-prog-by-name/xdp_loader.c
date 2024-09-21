@@ -6,7 +6,6 @@ static const char *__doc__ = "XDP loader\n"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
 #include <getopt.h>
 
 #include <bpf/bpf.h>
