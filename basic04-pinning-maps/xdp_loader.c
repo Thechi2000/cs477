@@ -116,6 +116,7 @@ int main(int argc, char **argv)
 {
 	struct xdp_program *program;
 	int err;
+	char errmsg[1024];
 
 	struct config cfg = {
 		.attach_mode = XDP_MODE_NATIVE,
@@ -134,8 +135,16 @@ int main(int argc, char **argv)
 		return EXIT_FAIL_OPTION;
 	}
 	if (cfg.do_unload) {
-		/* TODO: Miss unpin of maps on unload */
-		/* return xdp_link_detach(cfg.ifindex, cfg.xdp_flags, 0); */
+		err = do_unload(&cfg);
+		if (err) {
+			libxdp_strerror(err, errmsg, sizeof(errmsg));
+			fprintf(stderr, "Couldn't unload XDP program %d: %s\n",
+				cfg.prog_id, errmsg);
+			return err;
+		}
+
+		printf("Success: Unloading XDP prog name: %s\n", cfg.progname);
+		return EXIT_OK;
 	}
 
 	program = load_bpf_and_xdp_attach(&cfg);

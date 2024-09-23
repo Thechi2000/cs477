@@ -1,4 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0 */
+#include <bpf/libbpf_legacy.h>
+#include <linux/bpf.h>
 static const char *__doc__ = "XDP stats program\n"
 	" - Finding xdp_stats_map via --dev name info\n";
 
@@ -191,7 +193,7 @@ static void stats_collect(int map_fd, __u32 map_type,
 	}
 }
 
-static void stats_poll(int map_fd, __u32 map_type, int interval)
+static void stats_poll(int map_fd, __u32 map_type, int interval, const char* pin_dir, struct bpf_map_info* info)
 {
 	struct stats_record prev, record = { 0 };
 
@@ -203,7 +205,14 @@ static void stats_poll(int map_fd, __u32 map_type, int interval)
 	usleep(1000000/4);
 
 	while (1) {
-		prev = record; /* struct copy */
+		int new_fd = open_bpf_map_file(pin_dir, "xdp_stats_map", info);
+		if(new_fd != map_fd) {
+			bzero(&prev,sizeof(prev));
+			map_fd = new_fd;
+		} else {
+			prev = record; /* struct copy */
+		}
+
 		stats_collect(map_fd, map_type, &record);
 		stats_print(&record, &prev);
 		sleep(interval);
@@ -270,6 +279,6 @@ int main(int argc, char **argv)
 		       );
 	}
 
-	stats_poll(stats_map_fd, info.type, interval);
+	stats_poll(stats_map_fd, info.type, interval, pin_dir, &info);
 	return EXIT_OK;
 }
